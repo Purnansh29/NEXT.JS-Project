@@ -15,21 +15,46 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const { type = 'all', limit = 40 } = body;
 
-    const query = {};
-    if (type === 'positive') query.sentiment = 'positive';
-    if (type === 'negative') query.sentiment = 'negative';
+    let query = {};
+    if (type === 'positive') {
+      // Look for positive sentiment OR 4-5 star ratings
+      query = {
+        $or: [
+          { sentiment: 'positive' },
+          { rating: { $gte: 4 } },
+        ],
+      };
+    } else if (type === 'negative') {
+      // Look for negative sentiment OR 1-2 star ratings
+      query = {
+        $or: [
+          { sentiment: 'negative' },
+          { rating: { $lte: 2, $gt: 0 } },
+        ],
+      };
+    }
 
-    const feedbackList = await Feedback.find(query)
+    let feedbackList = await Feedback.find(query)
       .sort({ submissionDate: -1 })
       .limit(Math.min(100, limit))
       .select('feedbackText sentiment rating source')
       .lean();
 
+    // If still empty and type is not 'all', try falling back to all feedbacks
+    if (feedbackList.length === 0 && type !== 'all') {
+      feedbackList = await Feedback.find()
+        .sort({ submissionDate: -1 })
+        .limit(20)
+        .select('feedbackText sentiment rating source')
+        .lean();
+    }
+
     if (feedbackList.length === 0) {
       return Response.json(
         {
           success: false,
-          error: `No ${type !== 'all' ? type : ''} feedback records found to summarize.`,
+          error:
+            'No feedback found yet. Please go to "All Feedback" and click "Analyze Pending" to classify your records first.',
         },
         { status: 400 }
       );

@@ -12,6 +12,7 @@ import {
   Calendar,
   Layers,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAnalytics } from '@/hooks/useAnalytics';
@@ -22,13 +23,49 @@ import TopicGroup from '@/components/insights/TopicGroup';
 import Button from '@/components/ui/Button';
 
 export default function InsightsPage() {
-  const { topicsData } = useAnalytics();
-  const { feedbacks } = useFeedback({ limit: 50 });
+  const { topicsData, refresh: refreshAnalytics } = useAnalytics();
+  const { feedbacks, refresh: refreshFeedbacks } = useFeedback({ limit: 50 });
 
   const [reportTitle, setReportTitle] = useState('Monthly Customer Satisfaction Report');
   const [dateRange, setDateRange] = useState('Last 30 Days');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
   const [currentReport, setCurrentReport] = useState(null);
+
+  const pendingCount = feedbacks.filter(
+    (f) => f.analysisStatus === 'pending' || f.analysisStatus === 'failed'
+  ).length;
+
+  const handleBulkAnalyze = async () => {
+    try {
+      setIsBulkAnalyzing(true);
+      toast.loading('Running AI analysis across all pending records...', { id: 'bulk-ai-insights' });
+
+      const res = await fetch('/api/analyze/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 30 }),
+      });
+
+      const data = await res.json();
+      toast.dismiss('bulk-ai-insights');
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Bulk analysis failed');
+      }
+
+      toast.success(
+        `AI Batch Complete! ${data.successCount} analyzed successfully.`
+      );
+      refreshAnalytics();
+      refreshFeedbacks();
+    } catch (err) {
+      toast.dismiss('bulk-ai-insights');
+      toast.error(err.message);
+    } finally {
+      setIsBulkAnalyzing(false);
+    }
+  };
 
   const handleGenerateReport = async (e) => {
     e.preventDefault();
@@ -88,6 +125,34 @@ export default function InsightsPage() {
         </Link>
       </div>
 
+      {/* Pending Analysis Quick Alert Banner */}
+      {pendingCount > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-400">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                {pendingCount} Feedback records awaiting AI sentiment & topic analysis
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Run batch AI analysis to extract all positive highlights, complaints, and themes.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            icon={isBulkAnalyzing ? Loader2 : Sparkles}
+            isLoading={isBulkAnalyzing}
+            onClick={handleBulkAnalyze}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 text-xs shadow-sm"
+          >
+            Analyze All Pending with AI
+          </Button>
+        </div>
+      )}
+
       {/* Report Generator Control Card */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 space-y-4">
         <div>
@@ -96,7 +161,7 @@ export default function InsightsPage() {
             Synthesize New Executive Intelligence Report
           </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Gemini AI will analyze all customer feedback, extract critical pain points, and draft business recommendations.
+            Gemini AI will analyze customer feedback, extract critical pain points, and draft business recommendations.
           </p>
         </div>
 
