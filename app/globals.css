@@ -1,12 +1,14 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @source "../components/**/*.{js,jsx}";
 @source "../app/**/*.{js,jsx}";
 @source "../lib/**/*.{js,jsx}";
 
 :root {
   --background: #f8fafc;
-  --foreground: #09090b;
+  --foreground: #0f172a;
 }
 
 .dark {
@@ -14,9 +16,14 @@
   --foreground: #fafafa;
 }
 
+html {
+  color-scheme: light dark;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
+  min-height: 100vh;
 }
 
 /* Custom scrollbars */
@@ -30,10 +37,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(150, 150, 150, 0.2);
+  background: rgba(150, 150, 150, 0.25);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(150, 150, 150, 0.4);
+  background: rgba(150, 150, 150, 0.45);
 }
