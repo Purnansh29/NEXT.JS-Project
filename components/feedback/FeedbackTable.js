@@ -13,9 +13,10 @@ import {
   ClipboardList,
   Share2,
   PenTool,
-  Clock,
-  MoreVertical,
+  RotateCw,
+  Loader2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import SentimentBadge from './SentimentBadge';
 import { formatDate, truncate } from '@/lib/utils';
 import Button from '../ui/Button';
@@ -31,6 +32,7 @@ export default function FeedbackTable({
 }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [analyzingIds, setAnalyzingIds] = useState(new Set());
 
   const getSourceIcon = (source) => {
     switch (source?.toLowerCase()) {
@@ -55,11 +57,43 @@ export default function FeedbackTable({
     setDeleteTarget(null);
   };
 
+  const handleRunAnalysis = async (id) => {
+    try {
+      setAnalyzingIds((prev) => new Set(prev).add(id));
+      const res = await fetch(`/api/analyze/${id}`, { method: 'POST' });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Analysis failed');
+      }
+
+      toast.success(
+        `AI Analyzed: ${data.data.sentiment.toUpperCase()} (${Math.round((data.data.confidenceScore || 0) * 100)}% confidence)`
+      );
+
+      if (onAnalyze) {
+        onAnalyze();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message);
+    } finally {
+      setAnalyzingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60 space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center justify-between gap-4 py-3 border-b border-zinc-100 dark:border-zinc-800/60 last:border-0">
+          <div
+            key={i}
+            className="flex items-center justify-between gap-4 py-3 border-b border-zinc-100 dark:border-zinc-800/60 last:border-0"
+          >
             <div className="space-y-2 flex-1">
               <Skeleton className="h-4 w-3/4" />
               <div className="flex gap-2">
@@ -101,111 +135,145 @@ export default function FeedbackTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 text-zinc-800 dark:text-zinc-200">
-              {feedbacks.map((item) => (
-                <tr
-                  key={item._id}
-                  className="group transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40"
-                >
-                  {/* Feedback Text */}
-                  <td className="max-w-xs sm:max-w-sm px-5 py-4">
-                    <Link
-                      href={`/feedback/${item._id}`}
-                      className="font-medium text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400 transition-colors block"
-                    >
-                      {truncate(item.feedbackText, 95)}
-                    </Link>
-                    {item.explanation && (
-                      <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400 italic">
-                        &quot;{truncate(item.explanation, 80)}&quot;
-                      </p>
-                    )}
-                  </td>
+              {feedbacks.map((item) => {
+                const isItemAnalyzing = analyzingIds.has(item._id);
 
-                  {/* Rating Stars */}
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {item.rating ? (
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star
-                            key={star}
-                            className={`h-3.5 w-3.5 ${
-                              star <= item.rating
-                                ? 'fill-amber-400 text-amber-400'
-                                : 'fill-zinc-200 text-zinc-200 dark:fill-zinc-700 dark:text-zinc-700'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-zinc-400 text-[11px]">Unrated</span>
-                    )}
-                  </td>
-
-                  {/* Channel / Source */}
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                      {getSourceIcon(item.source)}
-                      {item.source}
-                    </span>
-                  </td>
-
-                  {/* Sentiment Badge */}
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <SentimentBadge
-                      sentiment={item.sentiment}
-                      status={item.analysisStatus}
-                    />
-                  </td>
-
-                  {/* Extracted Topics */}
-                  <td className="px-4 py-4">
-                    <div className="flex flex-wrap gap-1 max-w-[180px]">
-                      {item.topics && item.topics.length > 0 ? (
-                        item.topics.slice(0, 2).map((topic, idx) => (
-                          <span
-                            key={idx}
-                            className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                          >
-                            {topic}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-zinc-400 text-[11px]">—</span>
+                return (
+                  <tr
+                    key={item._id}
+                    className="group transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40"
+                  >
+                    {/* Feedback Text */}
+                    <td className="max-w-xs sm:max-w-sm px-5 py-4">
+                      <Link
+                        href={`/feedback/${item._id}`}
+                        className="font-medium text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400 transition-colors block"
+                      >
+                        {truncate(item.feedbackText, 95)}
+                      </Link>
+                      {item.explanation && (
+                        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400 italic">
+                          &quot;{truncate(item.explanation, 85)}&quot;
+                        </p>
                       )}
-                      {item.topics && item.topics.length > 2 && (
-                        <span className="text-[10px] text-zinc-400">
-                          +{item.topics.length - 2}
+                    </td>
+
+                    {/* Rating Stars */}
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      {item.rating ? (
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`h-3.5 w-3.5 ${
+                                star <= item.rating
+                                  ? 'fill-amber-400 text-amber-400'
+                                  : 'fill-zinc-200 text-zinc-200 dark:fill-zinc-700 dark:text-zinc-700'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-400 text-[11px]">Unrated</span>
+                      )}
+                    </td>
+
+                    {/* Channel / Source */}
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {getSourceIcon(item.source)}
+                        {item.source}
+                      </span>
+                    </td>
+
+                    {/* Sentiment Badge */}
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <SentimentBadge
+                        sentiment={item.sentiment}
+                        status={isItemAnalyzing ? 'analyzing' : item.analysisStatus}
+                      />
+                      {item.confidenceScore && item.analysisStatus === 'completed' && (
+                        <span className="ml-1.5 text-[10px] text-zinc-400">
+                          {Math.round(item.confidenceScore * 100)}%
                         </span>
                       )}
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Submission Date */}
-                  <td className="px-4 py-4 whitespace-nowrap text-[11px] text-zinc-500 dark:text-zinc-400">
-                    {formatDate(item.submissionDate || item.createdAt)}
-                  </td>
+                    {/* Extracted Topics */}
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-1 max-w-[180px]">
+                        {item.topics && item.topics.length > 0 ? (
+                          item.topics.slice(0, 2).map((topic, idx) => (
+                            <span
+                              key={idx}
+                              className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                            >
+                              {topic}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-zinc-400 text-[11px]">—</span>
+                        )}
+                        {item.topics && item.topics.length > 2 && (
+                          <span className="text-[10px] text-zinc-400">
+                            +{item.topics.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
-                  {/* Actions */}
-                  <td className="px-5 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {/* View Details */}
-                      <Link href={`/feedback/${item._id}`}>
-                        <Button variant="ghost" size="sm" icon={ExternalLink} title="View Details" />
-                      </Link>
+                    {/* Submission Date */}
+                    <td className="px-4 py-4 whitespace-nowrap text-[11px] text-zinc-500 dark:text-zinc-400">
+                      {formatDate(item.submissionDate || item.createdAt)}
+                    </td>
 
-                      {/* Delete */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={Trash2}
-                        onClick={() => setDeleteTarget(item)}
-                        title="Delete Feedback"
-                        className="text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    {/* Actions */}
+                    <td className="px-5 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Run AI Analysis button */}
+                        {item.analysisStatus !== 'completed' ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={isItemAnalyzing ? Loader2 : Sparkles}
+                            isLoading={isItemAnalyzing}
+                            onClick={() => handleRunAnalysis(item._id)}
+                            title="Analyze with AI"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] px-2 py-1"
+                          >
+                            Analyze
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={isItemAnalyzing ? Loader2 : RotateCw}
+                            isLoading={isItemAnalyzing}
+                            onClick={() => handleRunAnalysis(item._id)}
+                            title="Re-analyze with AI"
+                            className="text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                          />
+                        )}
+
+                        {/* View Details */}
+                        <Link href={`/feedback/${item._id}`}>
+                          <Button variant="ghost" size="sm" icon={ExternalLink} title="View Details" />
+                        </Link>
+
+                        {/* Delete */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={Trash2}
+                          onClick={() => setDeleteTarget(item)}
+                          title="Delete Feedback"
+                          className="text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400"
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

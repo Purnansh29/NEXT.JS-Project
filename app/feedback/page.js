@@ -1,7 +1,7 @@
 // app/feedback/page.js
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Plus,
@@ -11,7 +11,9 @@ import {
   ChevronRight,
   MessageSquare,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useFeedback } from '@/hooks/useFeedback';
 import FilterBar from '@/components/feedback/FilterBar';
 import FeedbackTable from '@/components/feedback/FeedbackTable';
@@ -30,6 +32,43 @@ export default function FeedbackPage() {
     deleteFeedback,
   } = useFeedback();
 
+  const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
+
+  // Count how many in current view are pending or failed
+  const pendingCount = feedbacks.filter(
+    (f) => f.analysisStatus === 'pending' || f.analysisStatus === 'failed'
+  ).length;
+
+  const handleBulkAnalyze = async () => {
+    try {
+      setIsBulkAnalyzing(true);
+      toast.loading('Analyzing pending feedback with AI...', { id: 'bulk-ai' });
+
+      const res = await fetch('/api/analyze/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 25 }),
+      });
+
+      const data = await res.json();
+      toast.dismiss('bulk-ai');
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Bulk analysis failed');
+      }
+
+      toast.success(
+        `AI Batch Done! ${data.successCount} analyzed successfully, ${data.failedCount} failed.`
+      );
+      refresh();
+    } catch (err) {
+      toast.dismiss('bulk-ai');
+      toast.error(err.message);
+    } finally {
+      setIsBulkAnalyzing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
@@ -45,7 +84,18 @@ export default function FeedbackPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {pendingCount > 0 && (
+            <Button
+              size="sm"
+              icon={isBulkAnalyzing ? Loader2 : Sparkles}
+              isLoading={isBulkAnalyzing}
+              onClick={handleBulkAnalyze}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-indigo-600/20"
+            >
+              Analyze Pending ({pendingCount})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
