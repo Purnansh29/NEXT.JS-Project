@@ -3,9 +3,32 @@ import connectDB from '@/lib/mongodb';
 import Feedback from '@/models/Feedback';
 
 /**
+ * Case-insensitive value finder for CSV object keys
+ */
+function getColumnValue(row, pattern) {
+  const matchingKey = Object.keys(row).find((k) => pattern.test(k.trim()));
+  return matchingKey !== undefined ? row[matchingKey] : undefined;
+}
+
+/**
+ * Normalizes different incoming channel names to our standard enum
+ */
+function normalizeSource(raw) {
+  if (!raw) return 'manual';
+  const s = raw.toString().toLowerCase().trim();
+
+  if (s.includes('email') || s.includes('mail')) return 'email';
+  if (s.includes('chat') || s.includes('intercom') || s.includes('zendesk') || s.includes('slack')) return 'chat';
+  if (s.includes('survey') || s.includes('form') || s.includes('typeform') || s.includes('poll')) return 'survey';
+  if (s.includes('social') || s.includes('twitter') || s.includes('x') || s.includes('facebook') || s.includes('instagram') || s.includes('review') || s.includes('google')) return 'social';
+  if (s.includes('manual') || s.includes('direct') || s.includes('internal')) return 'manual';
+
+  return 'other';
+}
+
+/**
  * POST /api/feedback/import
- * Bulk imports parsed feedback rows into MongoDB
- * Expects JSON payload: { rows: [ { feedbackText, source, rating, submissionDate }, ... ] }
+ * Bulk imports parsed feedback rows into MongoDB with case-insensitive column mapping
  */
 export async function POST(request) {
   try {
@@ -20,39 +43,37 @@ export async function POST(request) {
       );
     }
 
-    if (rows.length > 1000) {
+    if (rows.length > 2000) {
       return Response.json(
-        { success: false, error: 'Maximum batch size is 1,000 rows per import.' },
+        { success: false, error: 'Maximum batch size is 2,000 rows per import.' },
         { status: 400 }
       );
     }
 
-    const validSources = ['email', 'chat', 'survey', 'social', 'manual', 'other'];
     const validRows = [];
     const skippedRows = [];
 
     rows.forEach((row, index) => {
-      const text = row.feedbackText || row.text || row.Feedback || row.comment || row.Comment;
-      if (!text || typeof text !== 'string' || text.trim().length < 5) {
+      // Find feedback text case-insensitively
+      const rawText = getColumnValue(row, /^(feedback|feedbacktext|text|comment|comments|review|reviews|message|description)$/i)
+        || getColumnValue(row, /feedback|comment|review/i)
+        || Object.values(row).find(val => typeof val === 'string' && val.trim().length >= 10);
+
+      if (!rawText || typeof rawText !== 'string' || rawText.trim().length < 5) {
         skippedRows.push({
           row: index + 1,
-          reason: 'Feedback text is missing or too short (< 5 chars)',
+          reason: 'Feedback text is missing or too short (< 5 characters)',
         });
         return;
       }
 
-      // Parse source
-      let rawSource = (row.source || row.Source || row.channel || row.Channel || 'manual')
-        .toString()
-        .toLowerCase()
-        .trim();
-      if (!validSources.includes(rawSource)) {
-        rawSource = 'other';
-      }
+      // Find source / channel case-insensitively
+      const rawSource = getColumnValue(row, /^(source|channel|platform|via|type)$/i);
+      const source = normalizeSource(rawSource);
 
-      // Parse rating
+      // Find rating (1 - 5) case-insensitively
       let rating = null;
-      const rawRating = row.rating !== undefined ? row.rating : row.Rating;
+      const rawRating = getColumnValue(row, /^(rating|rate|stars|score)$/i);
       if (rawRating !== undefined && rawRating !== null && rawRating !== '') {
         const num = Number(rawRating);
         if (!isNaN(num) && num >= 1 && num <= 5) {
@@ -60,9 +81,9 @@ export async function POST(request) {
         }
       }
 
-      // Parse date
+      // Find submission date case-insensitively
       let submissionDate = new Date();
-      const rawDate = row.submissionDate || row.date || row.Date;
+      const rawDate = getColumnValue(row, /^(date|submissiondate|submitted|created|timestamp|createdat)$/i);
       if (rawDate) {
         const parsedDate = new Date(rawDate);
         if (!isNaN(parsedDate.getTime())) {
@@ -71,8 +92,8 @@ export async function POST(request) {
       }
 
       validRows.push({
-        feedbackText: text.trim().substring(0, 5000),
-        source: rawSource,
+        feedbackText: rawText.trim().substring(0, 5000),
+        source,
         rating,
         submissionDate,
         analysisStatus: 'pending',
@@ -83,22 +104,22 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          error: 'No valid rows found in the CSV. Ensure there is a column with feedback text.',
+          error: 'No valid rows found in the CSV. Ensure there is a column containing customer feedback text.',
           skipped: skippedRows,
         },
         { status: 400 }
       );
     }
 
-    // Insert valid records in bulk
+    // Insert valid records into MongoDB
     const inserted = await Feedback.insertMany(validRows, { ordered: false });
 
     return Response.json({
       success: true,
-      message: `Successfully imported ${inserted.length} feedback records.`,
+      message: `Successfully imported ${inserted.length} feedback records!`,
       importedCount: inserted.length,
       skippedCount: skippedRows.length,
-      skippedDetails: skippedRows.slice(0, 10), // return top 10 skipped details
+      skippedDetails: skippedRows.slice(0, 10),
     });
   } catch (error) {
     console.error('CSV import error:', error);
