@@ -11,6 +11,7 @@
 - [Tech Stack](#-tech-stack)
 - [Project Directory Structure](#-project-directory-structure)
 - [Getting Started](#-getting-started)
+- [Deployment Guide (Vercel)](#-deployment-guide)
 - [MongoDB Atlas Whitelisting Guide](#-mongodb-atlas-whitelisting-guide)
 - [Environment Variables](#-environment-variables)
 - [API Route Reference](#-api-route-reference)
@@ -213,6 +214,23 @@ GEMINI_API_KEY=your_actual_gemini_api_key_here
 npm run dev
 ```
 Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+---
+
+## 🚀 Deployment Guide
+
+FeedbackAI is optimized for instant deployment to **Vercel** with zero custom server configuration.
+
+👉 **Read the complete step-by-step instructions in [DEPLOYMENT.md](file:///d:/NEXT.JS-Project/feedbackai/DEPLOYMENT.md)**.
+
+### Quick Vercel Setup:
+1. Push your code to GitHub.
+2. Sign in to [Vercel](https://vercel.com) and click **"Add New Project"** → select your repo (`Purnansh29/NEXT.JS-Project`).
+3. Under **Environment Variables**, set:
+   - `MONGODB_URI`: Your MongoDB Atlas connection string.
+   - `GEMINI_API_KEY`: Your Google Gemini API key.
+4. **Crucial:** In MongoDB Atlas → **Network Access**, ensure `0.0.0.0/0` is whitelisted so Vercel's serverless functions can connect.
+5. Click **Deploy**!
 
 ---
 

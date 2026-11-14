@@ -14,13 +14,15 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('feedbackai_theme') || 'dark';
-    setTheme(savedTheme);
     if (savedTheme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-    setMounted(true);
+    setTimeout(() => {
+      setTheme(savedTheme);
+      setMounted(true);
+    }, 0);
   }, []);
 
   const toggleTheme = () => {

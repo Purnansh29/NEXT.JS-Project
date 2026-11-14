@@ -1,7 +1,7 @@
 // components/ui/Select.js
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 
@@ -13,7 +13,8 @@ export default function Select({
   id,
   ...props
 }) {
-  const selectId = id || props.name || Math.random().toString(36).substring(7);
+  const generatedId = useId();
+  const selectId = id || props.name || generatedId;
 
   return (
     <div className="w-full space-y-1.5">

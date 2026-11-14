@@ -28,6 +28,7 @@ export function useFeedback(initialFilters = {}) {
 
   const fetchFeedback = useCallback(async () => {
     try {
+      await Promise.resolve();
       setLoading(true);
       setError(null);
 
@@ -56,7 +57,15 @@ export function useFeedback(initialFilters = {}) {
   }, [filters]);
 
   useEffect(() => {
-    fetchFeedback();
+    let isSubscribed = true;
+    if (isSubscribed) {
+      setTimeout(() => {
+        fetchFeedback();
+      }, 0);
+    }
+    return () => {
+      isSubscribed = false;
+    };
   }, [fetchFeedback]);
 
   const updateFilters = (newFilters) => {

@@ -1,7 +1,7 @@
 // components/ui/Input.js
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 import { cn } from '@/lib/utils';
 
 export default function Input({
@@ -13,7 +13,8 @@ export default function Input({
   id,
   ...props
 }) {
-  const inputId = id || props.name || Math.random().toString(36).substring(7);
+  const generatedId = useId();
+  const inputId = id || props.name || generatedId;
 
   return (
     <div className="w-full space-y-1.5">
